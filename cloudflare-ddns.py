@@ -112,7 +112,7 @@ def commitRecord(ip):
 
 def prepareDNSRecord(subdomain, base_domain_name, ip, option):
     name = subdomain.get("name", subdomain).strip().lower()
-    proxied = subdomain.get("proxied", option["proxied"])
+    proxied = subdomain.get("proxied", option.get("proxied", False))  # Use default False if not set
     fqdn = f"{name}.{base_domain_name}" if name and name != '@' else base_domain_name
     record = {"type": ip["type"], "name": fqdn, "content": ip["ip"], "proxied": proxied, "ttl": ttl}
     return fqdn, record
