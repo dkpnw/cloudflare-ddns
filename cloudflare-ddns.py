@@ -36,22 +36,73 @@ def deleteEntries(type):
                 print(f"🗑️ Deleted stale record {identifier}")
 
 def getIPs():
-    global ipv4_enabled, ipv6_enabled, purgeUnknownRecords
-    ips = {}
+    def get_public_ip():
+        ip_detection_services = [
+            "https://api.ipify.org",
+            "https://icanhazip.com",
+            "https://ifconfig.me"
+        ]
+        for service in ip_detection_services:
+            try:
+                response = requests.get(service, timeout=5)
+                if response.status_code == 200:
+                    return response.text.strip()  # Successfully retrieved IP
+            except requests.RequestException as e:
+                print(f"Error with {service}: {e}")
+        raise Exception("Failed to detect public IP from all services.")
+
+    a = None
+    aaaa = None
+    global ipv4_enabled
+    global ipv6_enabled
+    global purgeUnknownRecords
+
     if ipv4_enabled:
         try:
-            a = fetchIP("https://1.1.1.1/cdn-cgi/trace")
-            print(f"✅ Detected IPv4: {a}")
-            ips["ipv4"] = {"type": "A", "ip": a}
-        except Exception:
-            handleIPError("IPv4", "A")
+            a = get_public_ip()  # Use the fallback mechanism for IPv4
+        except Exception as e:
+            global shown_ipv4_warning
+            if not shown_ipv4_warning:
+                shown_ipv4_warning = True
+                print(f"🧩 IPv4 detection failed: {e}")
+            if purgeUnknownRecords:
+                deleteEntries("A")
+
     if ipv6_enabled:
         try:
-            aaaa = fetchIP("https://[2606:4700:4700::1111]/cdn-cgi/trace")
-            print(f"✅ Detected IPv6: {aaaa}")
-            ips["ipv6"] = {"type": "AAAA", "ip": aaaa}
+            aaaa = requests.get(
+                "https://[2606:4700:4700::1111]/cdn-cgi/trace").text.split("\n")
+            aaaa.pop()
+            aaaa = dict(s.split("=") for s in aaaa)["ip"]
         except Exception:
-            handleIPError("IPv6", "AAAA")
+            global shown_ipv6_warning
+            if not shown_ipv6_warning:
+                shown_ipv6_warning = True
+                print("🧩 IPv6 not detected via 1.1.1.1, trying 1.0.0.1")
+            try:
+                aaaa = requests.get(
+                    "https://[2606:4700:4700::1001]/cdn-cgi/trace").text.split("\n")
+                aaaa.pop()
+                aaaa = dict(s.split("=") for s in aaaa)["ip"]
+            except Exception:
+                global shown_ipv6_warning_secondary
+                if not shown_ipv6_warning_secondary:
+                    shown_ipv6_warning_secondary = True
+                    print("🧩 IPv6 not detected via 1.0.0.1. Verify your ISP or DNS provider isn't blocking Cloudflare's IPs.")
+                if purgeUnknownRecords:
+                    deleteEntries("AAAA")
+
+    ips = {}
+    if a is not None:
+        ips["ipv4"] = {
+            "type": "A",
+            "ip": a
+        }
+    if aaaa is not None:
+        ips["ipv6"] = {
+            "type": "AAAA",
+            "ip": aaaa
+        }
     return ips
 
 def fetchIP(url):
