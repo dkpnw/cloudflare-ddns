@@ -98,19 +98,30 @@ def handleIPError(ip_type, record_type):
         deleteEntries(record_type)
 
 def commitRecord(ip):
+    """
+    For each Cloudflare zone in the configuration, attempt to update each subdomain's DNS record.
+    Count successes and failures, and return a summary.
+    """
     global ttl
+    total = 0
+    successes = 0
+    failures = 0
     for option in config["cloudflare"]:
         subdomains = option["subdomains"]
         response = cf_api(f"zones/{option['zone_id']}", "GET", option)
         if response and response.get("result"):
             base_domain_name = response["result"]["name"]
             for subdomain in subdomains:
+                total += 1
                 fqdn, record = prepareDNSRecord(subdomain, base_domain_name, ip, option)
                 try:
                     processDNSRecord(fqdn, record, ip["type"], option)
                     print(f"✅  Successfully updated {ip['type']} record for {fqdn} to {ip['ip']}")
+                    successes += 1
                 except Exception as e:
                     print(f"❌  Failed to update {ip['type']} record for {fqdn}: {e}")
+                    failures += 1
+    return successes, failures, total
 
 def prepareDNSRecord(subdomain, base_domain_name, ip, option):
     # Allow subdomain to be either a dict (with a 'name' key) or a plain string.
@@ -161,13 +172,20 @@ def buildHeaders(config):
         }
 
 def updateIPs(ips):
+    """
+    Process each IP update and then print a summary indicating whether
+    all subdomains were updated successfully or if some failed.
+    """
     print(f"🔄  Updating IPs: {ips}")
     for ip in ips.values():
         try:
-            commitRecord(ip)
-            print(f"✅  Successfully updated {ip['type']} record to {ip['ip']}")
+            successes, failures, total = commitRecord(ip)
+            if failures == 0:
+                print(f"✅  All {total} subdomains updated successfully for {ip['type']} record to {ip['ip']}")
+            else:
+                print(f"❌  {failures} out of {total} subdomains failed to update for {ip['type']} record. Refer to console log for details.")
         except Exception as e:
-            print(f"❌  Failed to update {ip['type']} record: {e}")
+            print(f"❌  Failed to update {ip['type']} records: {e}")
 
 if __name__ == '__main__':
     print("🚀  Starting Cloudflare DDNS Updater")
@@ -189,9 +207,8 @@ if __name__ == '__main__':
     print(f"🔄  TTL set to {ttl} seconds")
 
     # Use configuration settings for enabling IPv4 and IPv6.
-    # The "a" key is used for IPv4 and the "aaaa" key for IPv6.
     ipv4_enabled = config.get("a", True)        # Defaults to True if not specified.
-    ipv6_enabled = config.get("aaaa", True)       # Set this to False in config.json to disable IPv6.
+    ipv6_enabled = config.get("aaaa", True)       # Set to False in config.json to disable IPv6.
     purgeUnknownRecords = config.get("purgeUnknownRecords", False)
 
     killer = GracefulExit()
