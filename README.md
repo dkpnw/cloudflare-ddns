@@ -5,7 +5,7 @@
 Access your home network remotely via a custom domain name without a static IP!
 
 
-This is a fork of timothyjmiller's popular Cloudflare DDNS Updater. This fork modifies the following:
+This is a fork of timothymiller's popular Cloudflare DDNS Updater. This fork modifies the following:
 - Includes redundant IPv4 and IPv6 detection sources in cases of Cloudflare issues (this is what inspired the fork in the first place)
 - Tweaks to logging to improve clarity and usefulness in messaging from the updater script
 Everything else is pretty much the same. It was already a great and useful script!
