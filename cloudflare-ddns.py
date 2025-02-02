@@ -61,7 +61,7 @@ def getIPs():
         except Exception:
             handleIPError("IPv6", "AAAA")
     else:
-        print("⚙️ IPv6 disabled in configuration.")
+        print("⚙️ IPv6 disabled in configuration. Skipping all IPv6 operations.")
 
     return ips
 
@@ -71,6 +71,8 @@ def fetchIP(url):
     return dict(s.split("=") for s in response)["ip"]
 
 def handleIPError(ip_type, record_type):
+    if ip_type == "IPv6" and not ipv6_enabled:
+        return  # Skip logging or actions for disabled IPv6
     print(f"🧩 {ip_type} not detected. Verify your ISP or DNS provider isn't blocking Cloudflare.")
     if purgeUnknownRecords:
         deleteEntries(record_type)
