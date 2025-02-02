@@ -48,38 +48,38 @@ def getIPs():
     if ipv4_enabled:
         try:
             a = fetchIP("https://1.1.1.1/cdn-cgi/trace")
-            print(f"✅ Detected IPv4: {a}")
+            print(f"✅  Detected IPv4: {a}")
             ips["ipv4"] = {"type": "A", "ip": a}
         except Exception:
-            print("🧩 IPv4 not detected. Trying backup...")
+            print("🧩  IPv4 not detected. Trying backup...")
             try:
                 a = fetchIP("https://1.0.0.1/cdn-cgi/trace")
-                print(f"✅ Detected IPv4 from backup: {a}")
+                print(f"✅  Detected IPv4 from backup: {a}")
                 ips["ipv4"] = {"type": "A", "ip": a}
             except Exception:
-                print("🧩 IPv4 not detected via backup. Verify your ISP or DNS provider.")
+                print("🧩  IPv4 not detected via backup. Verify your ISP or DNS provider.")
                 if purgeUnknownRecords:
                     deleteEntries("A")
     else:
-        print("⚙️ IPv4 is disabled in the configuration. Skipping IPv4 operations.")
+        print("⚙️  IPv4 is disabled in the configuration. Skipping IPv4 operations.")
 
     # IPv6 Handling
     if not ipv6_enabled:
-        print("⚙️ IPv6 is disabled in the configuration. Skipping IPv6 operations.")
+        print("⚙️  IPv6 is disabled in the configuration. Skipping IPv6 operations.")
         return ips
 
     try:
         aaaa = fetchIP("https://[2606:4700:4700::1111]/cdn-cgi/trace")
-        print(f"✅ Detected IPv6: {aaaa}")
+        print(f"✅  Detected IPv6: {aaaa}")
         ips["ipv6"] = {"type": "AAAA", "ip": aaaa}
     except Exception:
-        print("🧩 IPv6 not detected. Trying backup...")
+        print("🧩  IPv6 not detected. Trying backup...")
         try:
             aaaa = fetchIP("https://[2606:4700:4700::1001]/cdn-cgi/trace")
-            print(f"✅ Detected IPv6 from backup: {aaaa}")
+            print(f"✅  Detected IPv6 from backup: {aaaa}")
             ips["ipv6"] = {"type": "AAAA", "ip": aaaa}
         except Exception:
-            print("🧩 IPv6 not detected via backup. Verify your ISP or DNS provider.")
+            print("🧩  IPv6 not detected via backup. Verify your ISP or DNS provider.")
             if purgeUnknownRecords:
                 deleteEntries("AAAA")
 
