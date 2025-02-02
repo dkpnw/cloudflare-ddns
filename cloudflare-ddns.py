@@ -42,51 +42,27 @@ def deleteEntries(type):
                 print(f"🗑️ Deleted stale record {identifier}")
 
 def getIPs():
-    global shown_ipv4_warning, shown_ipv4_warning_secondary
-    global shown_ipv6_warning, shown_ipv6_warning_secondary
-
     ips = {}
-    # IPv4 Handling
     if ipv4_enabled:
         try:
             a = fetchIP("https://1.1.1.1/cdn-cgi/trace")
             print(f"✅ Detected IPv4: {a}")
             ips["ipv4"] = {"type": "A", "ip": a}
         except Exception:
-            if not shown_ipv4_warning:
-                print("🧩 IPv4 not detected via 1.1.1.1, trying backup...")
-                shown_ipv4_warning = True
-            try:
-                a = fetchIP("https://1.0.0.1/cdn-cgi/trace")
-                print(f"✅ Detected IPv4 from backup: {a}")
-                ips["ipv4"] = {"type": "A", "ip": a}
-            except Exception:
-                if not shown_ipv4_warning_secondary:
-                    print("🧩 IPv4 not detected via backup. Verify your ISP or DNS provider.")
-                    shown_ipv4_warning_secondary = True
-                if purgeUnknownRecords:
-                    deleteEntries("A")
+            handleIPError("IPv4", "A")
+    else:
+        print("⚙️ IPv4 disabled in configuration.")
 
-    # IPv6 Handling
     if ipv6_enabled:
         try:
             aaaa = fetchIP("https://[2606:4700:4700::1111]/cdn-cgi/trace")
             print(f"✅ Detected IPv6: {aaaa}")
             ips["ipv6"] = {"type": "AAAA", "ip": aaaa}
         except Exception:
-            if not shown_ipv6_warning:
-                print("🧩 IPv6 not detected via primary. Trying backup...")
-                shown_ipv6_warning = True
-            try:
-                aaaa = fetchIP("https://[2606:4700:4700::1001]/cdn-cgi/trace")
-                print(f"✅ Detected IPv6 from backup: {aaaa}")
-                ips["ipv6"] = {"type": "AAAA", "ip": aaaa}
-            except Exception:
-                if not shown_ipv6_warning_secondary:
-                    print("🧩 IPv6 not detected via backup. Verify your ISP or DNS provider.")
-                    shown_ipv6_warning_secondary = True
-                if purgeUnknownRecords:
-                    deleteEntries("AAAA")
+            handleIPError("IPv6", "AAAA")
+    else:
+        print("⚙️ IPv6 disabled in configuration.")
+
     return ips
 
 def fetchIP(url):
