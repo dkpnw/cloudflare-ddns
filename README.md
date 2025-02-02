@@ -4,6 +4,12 @@
 
 Access your home network remotely via a custom domain name without a static IP!
 
+
+This is a fork of timothyjmiller's popular Cloudflare DDNS Updater. This fork modifies the following:
+- Includes redundant IPv4 and IPv6 detection sources in cases of Cloudflare issues (this is what inspired the fork in the first place)
+- Tweaks to logging to improve clarity and usefulness in messaging from the updater script
+Everything else is pretty much the same. It was already a great and useful script!
+
 ## ⚡ Efficiency
 
 - ❤️ Easy config. List your domains and you're done.
@@ -13,7 +19,7 @@ Access your home network remotely via a custom domain name without a static IP!
 - 0️⃣ Zero dependencies.
 - 💪 Supports all platforms.
 - 🏠 Enables low cost self hosting to promote a more decentralized internet.
-- 🔒 Zero-log IP provider ([cdn-cgi/trace](https://www.cloudflare.com/cdn-cgi/trace))
+- 🔒 Zero-log IP provider ([cdn-cgi/trace](https://www.cloudflare.com/cdn-cgi/trace)) + 3 additional sources in cases of CloudFlare errors (api.ipify.org, ipv4.icanhazip.com, and checkip.amazonaws.com) If one fails, it continues onto the next in the list.
 - 👐 GPL-3.0 License. Open source for open audits.
 
 ## 💯 Complete Support of Domain Names, Subdomains, IPv4 & IPv6, and Load Balancing
