@@ -54,35 +54,38 @@ def deleteEntries(type):
 
 
 def getIPs():
+    def get_public_ip():
+        ip_detection_services = [
+            "https://api.ipify.org",
+            "https://icanhazip.com",
+            "https://ifconfig.me"
+        ]
+        for service in ip_detection_services:
+            try:
+                response = requests.get(service, timeout=5)
+                if response.status_code == 200:
+                    return response.text.strip()  # Successfully retrieved IP
+            except requests.RequestException as e:
+                print(f"Error with {service}: {e}")
+        raise Exception("Failed to detect public IP from all services.")
+
     a = None
     aaaa = None
     global ipv4_enabled
     global ipv6_enabled
     global purgeUnknownRecords
+
     if ipv4_enabled:
         try:
-            a = requests.get(
-                "https://1.1.1.1/cdn-cgi/trace").text.split("\n")
-            a.pop()
-            a = dict(s.split("=") for s in a)["ip"]
-        except Exception:
+            a = get_public_ip()  # Use the fallback mechanism for IPv4
+        except Exception as e:
             global shown_ipv4_warning
             if not shown_ipv4_warning:
                 shown_ipv4_warning = True
-                print("🧩 IPv4 not detected via 1.1.1.1, trying 1.0.0.1")
-            # Try secondary IP check
-            try:
-                a = requests.get(
-                    "https://1.0.0.1/cdn-cgi/trace").text.split("\n")
-                a.pop()
-                a = dict(s.split("=") for s in a)["ip"]
-            except Exception:
-                global shown_ipv4_warning_secondary
-                if not shown_ipv4_warning_secondary:
-                    shown_ipv4_warning_secondary = True
-                    print("🧩 IPv4 not detected via 1.0.0.1. Verify your ISP or DNS provider isn't blocking Cloudflare's IPs.")
-                if purgeUnknownRecords:
-                    deleteEntries("A")
+                print(f"🧩 IPv4 detection failed: {e}")
+            if purgeUnknownRecords:
+                deleteEntries("A")
+
     if ipv6_enabled:
         try:
             aaaa = requests.get(
@@ -106,13 +109,14 @@ def getIPs():
                     print("🧩 IPv6 not detected via 1.0.0.1. Verify your ISP or DNS provider isn't blocking Cloudflare's IPs.")
                 if purgeUnknownRecords:
                     deleteEntries("AAAA")
+
     ips = {}
-    if (a is not None):
+    if a is not None:
         ips["ipv4"] = {
             "type": "A",
             "ip": a
         }
-    if (aaaa is not None):
+    if aaaa is not None:
         ips["ipv6"] = {
             "type": "AAAA",
             "ip": aaaa
