@@ -194,7 +194,8 @@ if __name__ == '__main__':
         try:
             ips = getIPs()
             updateIPs(ips)
-            time.sleep(ttl)  # Sleep for the TTL duration
+            # Wait for the specified TTL or until a stop signal is received
+            killer.kill_now.wait(ttl)
         except KeyboardInterrupt:
             killer.kill_now.set()
         except Exception as e:
@@ -202,4 +203,5 @@ if __name__ == '__main__':
             time.sleep(10)
 
     print("🛑 Shutting down Cloudflare DDNS Updater.")
+
 
