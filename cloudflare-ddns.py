@@ -43,25 +43,43 @@ def deleteEntries(type):
 
 def getIPs():
     ips = {}
+    # IPv4 Handling
     if ipv4_enabled:
         try:
             a = fetchIP("https://1.1.1.1/cdn-cgi/trace")
             print(f"✅ Detected IPv4: {a}")
             ips["ipv4"] = {"type": "A", "ip": a}
         except Exception:
-            handleIPError("IPv4", "A")
+            print("🧩 IPv4 not detected. Trying backup...")
+            try:
+                a = fetchIP("https://1.0.0.1/cdn-cgi/trace")
+                print(f"✅ Detected IPv4 from backup: {a}")
+                ips["ipv4"] = {"type": "A", "ip": a}
+            except Exception:
+                print("🧩 IPv4 not detected via backup. Verify your ISP or DNS provider.")
+                if purgeUnknownRecords:
+                    deleteEntries("A")
     else:
-        print("⚙️ IPv4 disabled in configuration.")
+        print("⚙️ IPv4 is disabled in the configuration. Skipping IPv4 operations.")
 
+    # IPv6 Handling
     if ipv6_enabled:
         try:
             aaaa = fetchIP("https://[2606:4700:4700::1111]/cdn-cgi/trace")
             print(f"✅ Detected IPv6: {aaaa}")
             ips["ipv6"] = {"type": "AAAA", "ip": aaaa}
         except Exception:
-            handleIPError("IPv6", "AAAA")
+            print("🧩 IPv6 not detected. Trying backup...")
+            try:
+                aaaa = fetchIP("https://[2606:4700:4700::1001]/cdn-cgi/trace")
+                print(f"✅ Detected IPv6 from backup: {aaaa}")
+                ips["ipv6"] = {"type": "AAAA", "ip": aaaa}
+            except Exception:
+                print("🧩 IPv6 not detected via backup. Verify your ISP or DNS provider.")
+                if purgeUnknownRecords:
+                    deleteEntries("AAAA")
     else:
-        print("⚙️ IPv6 disabled in configuration. Skipping all IPv6 operations.")
+        print("⚙️ IPv6 is disabled in the configuration. Skipping IPv6 operations.")
 
     return ips
 
