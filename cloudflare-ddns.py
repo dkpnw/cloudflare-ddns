@@ -108,7 +108,11 @@ def commitRecord(ip):
             base_domain_name = response["result"]["name"]
             for subdomain in subdomains:
                 fqdn, record = prepareDNSRecord(subdomain, base_domain_name, ip, option)
-                processDNSRecord(fqdn, record, ip["type"], option)
+                try:
+                    processDNSRecord(fqdn, record, ip["type"], option)
+                    print(f"✅ Successfully updated {ip['type']} record for {fqdn} to {ip['ip']}")
+                except Exception as e:
+                    print(f"❌ Failed to update {ip['type']} record for {fqdn}: {e}")
 
 def prepareDNSRecord(subdomain, base_domain_name, ip, option):
     name = subdomain.get("name", subdomain).strip().lower()
