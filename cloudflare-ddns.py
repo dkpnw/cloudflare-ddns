@@ -22,6 +22,22 @@ shown_ipv6_warning_secondary = False
 CONFIG_PATH = os.environ.get('CONFIG_PATH', os.getcwd())
 ENV_VARS = {key: value for (key, value) in os.environ.items() if key.startswith('CF_DDNS_')}
 
+# Define multiple redundant sources for IP detection.
+IPV4_SOURCES = [
+    "https://1.1.1.1/cdn-cgi/trace",
+    "https://1.0.0.1/cdn-cgi/trace",
+    "https://api.ipify.org",
+    "https://ipv4.icanhazip.com",
+    "https://checkip.amazonaws.com"
+]
+
+IPV6_SOURCES = [
+    "https://[2606:4700:4700::1111]/cdn-cgi/trace",
+    "https://[2606:4700:4700::1001]/cdn-cgi/trace",
+    "https://api64.ipify.org",
+    "https://ipv6.icanhazip.com"
+]
+
 class GracefulExit:
     def __init__(self):
         self.kill_now = threading.Event()
@@ -41,54 +57,77 @@ def deleteEntries(record_type):
                 cf_api(f"zones/{option['zone_id']}/dns_records/{identifier}", "DELETE", option)
                 print(f"🗑️  Deleted stale record {identifier}")
 
+def fetchIP(url):
+    """
+    Fetch the IP from the given URL.
+    If the response contains key/value pairs (using "="), then parse it; 
+    otherwise, assume the entire response is the IP address.
+    """
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+    except Exception as e:
+        raise Exception(f"Error fetching from {url}: {e}")
+    text = response.text.strip()
+    # If the response contains an "=" character, assume it is key/value pairs.
+    if "=" in text:
+        lines = text.splitlines()
+        data = {}
+        for line in lines:
+            if '=' in line:
+                key, value = line.split("=", 1)
+                data[key.strip()] = value.strip()
+        ip = data.get("ip", None)
+        if ip:
+            return ip
+        else:
+            raise Exception(f"No 'ip' key found in response from {url}")
+    else:
+        # Otherwise, assume the entire text is the IP address.
+        return text
+
 def getIPs():
     ips = {}
 
     # IPv4 Handling
     if ipv4_enabled:
-        try:
-            a = fetchIP("https://1.1.1.1/cdn-cgi/trace")
-            print(f"✅  Detected IPv4: {a}")
-            ips["ipv4"] = {"type": "A", "ip": a}
-        except Exception:
-            print("🧩  IPv4 not detected. Trying backup...")
+        ip = None
+        for source in IPV4_SOURCES:
             try:
-                a = fetchIP("https://1.0.0.1/cdn-cgi/trace")
-                print(f"✅  Detected IPv4 from backup: {a}")
-                ips["ipv4"] = {"type": "A", "ip": a}
-            except Exception:
-                print("🧩  IPv4 not detected via backup. Verify your ISP or DNS provider.")
-                if purgeUnknownRecords:
-                    deleteEntries("A")
+                ip = fetchIP(source)
+                if ip:
+                    print(f"✅  Detected IPv4 from {source}: {ip}")
+                    ips["ipv4"] = {"type": "A", "ip": ip}
+                    break
+            except Exception as e:
+                print(f"🧩  IPv4 source {source} failed: {e}")
+        if "ipv4" not in ips:
+            print("🧩  IPv4 not detected from any source. Verify your ISP or DNS provider.")
+            if purgeUnknownRecords:
+                deleteEntries("A")
     else:
         print("⚙️  IPv4 is disabled in the configuration. Skipping IPv4 operations.")
 
     # IPv6 Handling
-    if not ipv6_enabled:
-        print("⚙️  IPv6 is disabled in the configuration. Skipping IPv6 operations.")
-        return ips
-
-    try:
-        aaaa = fetchIP("https://[2606:4700:4700::1111]/cdn-cgi/trace")
-        print(f"✅  Detected IPv6: {aaaa}")
-        ips["ipv6"] = {"type": "AAAA", "ip": aaaa}
-    except Exception:
-        print("🧩  IPv6 not detected. Trying backup...")
-        try:
-            aaaa = fetchIP("https://[2606:4700:4700::1001]/cdn-cgi/trace")
-            print(f"✅  Detected IPv6 from backup: {aaaa}")
-            ips["ipv6"] = {"type": "AAAA", "ip": aaaa}
-        except Exception:
-            print("🧩  IPv6 not detected via backup. Verify your ISP or DNS provider.")
+    if ipv6_enabled:
+        ip6 = None
+        for source in IPV6_SOURCES:
+            try:
+                ip6 = fetchIP(source)
+                if ip6:
+                    print(f"✅  Detected IPv6 from {source}: {ip6}")
+                    ips["ipv6"] = {"type": "AAAA", "ip": ip6}
+                    break
+            except Exception as e:
+                print(f"🧩  IPv6 source {source} failed: {e}")
+        if "ipv6" not in ips:
+            print("🧩  IPv6 not detected from any source. Verify your ISP or DNS provider.")
             if purgeUnknownRecords:
                 deleteEntries("AAAA")
+    else:
+        print("⚙️  IPv6 is disabled in the configuration. Skipping IPv6 operations.")
 
     return ips
-
-def fetchIP(url):
-    response = requests.get(url).text.split("\n")
-    response.pop()
-    return dict(s.split("=") for s in response)["ip"]
 
 def handleIPError(ip_type, record_type):
     if ip_type == "IPv6" and not ipv6_enabled:
@@ -187,6 +226,10 @@ def updateIPs(ips):
         except Exception as e:
             print(f"❌  Failed to update {ip['type']} records: {e}")
 
+###############################################################################
+# Main loop
+###############################################################################
+
 if __name__ == '__main__':
     print("🚀  Starting Cloudflare DDNS Updater")
     if sys.version_info < (3, 5):
@@ -207,15 +250,24 @@ if __name__ == '__main__':
     print(f"🔄  TTL set to {ttl} seconds")
 
     # Use configuration settings for enabling IPv4 and IPv6.
-    ipv4_enabled = config.get("a", True)        # Defaults to True if not specified.
-    ipv6_enabled = config.get("aaaa", True)       # Set to False in config.json to disable IPv6.
+    ipv4_enabled = config.get("a", True)
+    ipv6_enabled = config.get("aaaa", True)
     purgeUnknownRecords = config.get("purgeUnknownRecords", False)
+
+    # Global variable to keep track of the last detected IP addresses.
+    last_ips = {}
 
     killer = GracefulExit()
     while not killer.kill_now.is_set():
         try:
             ips = getIPs()
-            updateIPs(ips)
+            # Compare current detected IPs with the last known IPs.
+            if ips != last_ips:
+                print("🔄  Change in public IP detected. Updating Cloudflare records...")
+                updateIPs(ips)
+                last_ips = ips.copy()
+            else:
+                print("ℹ️  No change detected in public IP(s). Skipping update.")
             # Wait for the specified TTL or until a stop signal is received.
             killer.kill_now.wait(ttl)
         except KeyboardInterrupt:
