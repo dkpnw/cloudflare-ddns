@@ -191,6 +191,15 @@ if __name__ == '__main__':
 
     killer = GracefulExit()
     while not killer.kill_now.is_set():
-        ips = getIPs()
-        updateIPs(ips)
-        time.sleep(ttl)
+        try:
+            ips = getIPs()
+            updateIPs(ips)
+            time.sleep(ttl)  # Sleep for the TTL duration
+        except KeyboardInterrupt:
+            killer.kill_now.set()
+        except Exception as e:
+            print(f"❌ Unexpected error: {e}")
+            time.sleep(10)
+
+    print("🛑 Shutting down Cloudflare DDNS Updater.")
+
