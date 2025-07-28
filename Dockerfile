@@ -7,6 +7,7 @@ FROM base AS dependencies
 # install dependencies
 COPY requirements.txt .
 RUN pip install --user -r requirements.txt
+RUN ask add --no-cache openssl-client
 
 #
 # ---- Release ----
