@@ -16,7 +16,10 @@ import threading
 import time
 import requests
 import subprocess, shlex, json, pathlib
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
+LOCAL_TZ = ZoneInfo(os.getenv("TZ","UTC"))
 CONFIG_PATH = os.environ.get('CONFIG_PATH', os.getcwd())
 RESTART_CMD = os.getenv("AIRMESSAGE_RESTART_CMD")
 RESTART_COOLDOWN = int(os.getenv("AIRMESSAGE_RESTART_COOLDOWN", "300"))
@@ -122,17 +125,20 @@ def getIPs():
 
 def commitRecord(ip):
     global ttl
-    successes = failures = 0
+    
+    successes = 0
+    failures = 0
+    anything_changed = False          # <- master flag
 
     for option in config["cloudflare"]:
-        subdomains      = option["subdomains"]
-        zone_id         = option["zone_id"]
-        zone_changed    = False          # track whether we touched this zone
+        subdomains   = option["subdomains"]
+        zone_id      = option["zone_id"]
+        zone_changed = False
 
         response = cf_api(f"zones/{zone_id}", "GET", option)
         if not (response and response["result"].get("name")):
             time.sleep(5)
-            return
+            continue
 
         base_domain_name = response["result"]["name"]
 
@@ -145,7 +151,6 @@ def commitRecord(ip):
                 proxied = option["proxied"]
 
             fqdn = base_domain_name if name in ("", "@") else f"{name}.{base_domain_name}"
-
             record = {
                 "type":    ip["type"],
                 "name":    fqdn,
@@ -158,9 +163,9 @@ def commitRecord(ip):
                 f"zones/{zone_id}/dns_records?per_page=100&type={ip['type']}",
                 "GET", option)
 
-            identifier      = None
-            modified        = False
-            duplicate_ids   = []
+            identifier = None
+            modified   = False
+            duplicate_ids = []
 
             if dns_records:
                 for r in dns_records["result"]:
@@ -177,28 +182,33 @@ def commitRecord(ip):
                                     r["proxied"] != record["proxied"]):
                                 modified = True
 
+            # ----- add / update -----------------------------------------
             if identifier:
                 if modified:
                     print(f"📡 Updating record {record}")
                     cf_api(f"zones/{zone_id}/dns_records/{identifier}",
                            "PUT", option, {}, record)
                     zone_changed = True
-                    successes += 1
             else:
                 print(f"➕ Adding new record {record}")
                 cf_api(f"zones/{zone_id}/dns_records", "POST", option, {}, record)
                 zone_changed = True
-                successes += 1
 
+            # ----- purge duplicates ------------------------------------
             if purgeUnknownRecords:
                 for dup_id in duplicate_ids:
                     print(f"🗑️ Deleting stale record {dup_id}")
                     cf_api(f"zones/{zone_id}/dns_records/{dup_id}", "DELETE", option)
 
-        # ── heartbeat for this zone ───────────────────────────────────────
+        # ---- per‑zone heartbeat ---------------------------------------
         if not zone_changed:
-            print(f"ℹ️  No change needed for {len(subdomains)} "
+            now = datetime.now(LOCAL_TZ).strftime("%Y-%m-%d %H:%M:%S")
+            print(f"{now}  ℹ️  No change needed for {len(subdomains)} "
                   f"subdomains in zone {base_domain_name} ({ip['type']})")
+
+        anything_changed = anything_changed or zone_changed
+
+    return anything_changed
 
     return True
 
@@ -283,26 +293,52 @@ def cf_api(endpoint, method, config, headers={}, data=False):
 
 
 def updateIPs(ips):
+    changed = False
     for ip in ips.values():
-        commitRecord(ip)
-        updateLoadBalancer(ip)
-
+        if commitRecord(ip):              # bubbles up True/False
+            changed = True
+        if "load_balancer" in config:
+            updateLoadBalancer(ip)
+    return changed
+    
 def maybe_restart_airmessage():
-    """Restart AirMessage via RESTART_CMD if cooldown satisfied."""
+    """
+    Restart AirMessage via the command in AIRMESSAGE_RESTART_CMD,
+    but only if the cooldown has elapsed.  Uses a timeout so it
+    can never hang the main loop.
+    """
     global _last_restart
-    if not RESTART_CMD:
+
+    if not RESTART_CMD:            # feature disabled
         return
+
     now = time.time()
     if now - _last_restart < RESTART_COOLDOWN:
         print(f"⏱️  AirMessage restart cooling down ({RESTART_COOLDOWN}s)")
         return
-    print(f"🔁  Restarting AirMessage...")
+
+    print("🔁  Restarting AirMessage…")
     try:
-        subprocess.run(shlex.split(RESTART_CMD), check=True)
+        subprocess.run(
+            RESTART_CMD,
+            shell=True,                 # execute the whole string as‑is
+            check=True,
+            timeout=30,                 # prevent indefinite hang
+            stdout=subprocess.DEVNULL,  # hide ssh output
+            stderr=subprocess.PIPE      # capture errors for logging
+        )
         _last_restart = now
         print("✅  AirMessage restart succeeded")
+
+    except subprocess.TimeoutExpired:
+        print("❌  AirMessage restart FAILED – ssh command timed out (30 s)")
+
     except subprocess.CalledProcessError as e:
-        print(f"❌  AirMessage restart failed: {e}")
+        err = e.stderr.decode(errors="ignore").strip()
+        print(f"❌  AirMessage restart FAILED (exit {e.returncode}): {err}")
+
+    except Exception as e:
+        print(f"❌  AirMessage restart FAILED: {e}")
 
 
 if __name__ == '__main__':
@@ -362,15 +398,19 @@ if __name__ == '__main__':
                 next_time = time.time()
                 killer = GracefulExit()
                 prev_ips = None
-                last_ips = {}
+                last_ips = None
+                
                 while True:
                     ips_this_loop = getIPs()
-                    updateIPs(ips_this_loop)          # existing behaviour
+                    changed = updateIPs(ips_this_loop)
 
                     # Restart AirMessage only if the WAN IP really changed
-                    if ips_this_loop != last_ips:
+                    if changed:
                         maybe_restart_airmessage()
-                        last_ips = ips_this_loop.copy()
+                    else:
+                        print("🔸  AirMessage restart not required")
+                    
+                    last_ips = ips_this_loop.copy()
 
                     if killer.kill_now.wait(ttl):
                         break
