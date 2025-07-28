@@ -7,12 +7,11 @@ FROM base AS dependencies
 # install dependencies
 COPY requirements.txt .
 RUN pip install --user -r requirements.txt
-RUN ask add --no-cache openssl-client
-
 #
 # ---- Release ----
 FROM base AS release
 # copy installed dependencies and project source file(s)
+RUN apk add --no-cache openssh-client
 WORKDIR /
 COPY --from=dependencies /root/.local /root/.local
 COPY cloudflare-ddns.py .
