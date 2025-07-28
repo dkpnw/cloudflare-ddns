@@ -11,7 +11,8 @@ RUN pip install --user -r requirements.txt
 # ---- Release ----
 FROM base AS release
 # copy installed dependencies and project source file(s)
-RUN apk add --no-cache openssh-client
+RUN apk add --no-cache openssh-client tzdata
+ENV TZ=America/Los_Angeles
 WORKDIR /
 COPY --from=dependencies /root/.local /root/.local
 COPY cloudflare-ddns.py .
