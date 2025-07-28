@@ -6,7 +6,7 @@
 #                A small, 🕵️ privacy centric, and ⚡
 #                lightning fast multi-architecture Docker image for self hosting projects.
 
-__version__ = "1.0.2"
+__version__ = "1.0.3"
 
 import json
 import os
@@ -15,7 +15,7 @@ import sys
 import threading
 import time
 import requests
-Import subprocess, sales, json, pathlib
+import subprocess, shlex, json, pathlib
 
 CONFIG_PATH = os.environ.get('CONFIG_PATH', os.getcwd())
 RESTART_CMD = os.getenv("AIRMESSAGE_RESTART_CMD")
@@ -122,41 +122,49 @@ def getIPs():
 
 def commitRecord(ip):
     global ttl
+    successes = failures = 0
+
     for option in config["cloudflare"]:
-        subdomains = option["subdomains"]
-        response = cf_api("zones/" + option['zone_id'], "GET", option)
-        if response is None or response["result"]["name"] is None:
+        subdomains      = option["subdomains"]
+        zone_id         = option["zone_id"]
+        zone_changed    = False          # track whether we touched this zone
+
+        response = cf_api(f"zones/{zone_id}", "GET", option)
+        if not (response and response["result"].get("name")):
             time.sleep(5)
             return
+
         base_domain_name = response["result"]["name"]
+
         for subdomain in subdomains:
             try:
-                name = subdomain["name"].lower().strip()
+                name    = subdomain["name"].lower().strip()
                 proxied = subdomain["proxied"]
-            except:
-                name = subdomain
+            except Exception:
+                name    = subdomain
                 proxied = option["proxied"]
-            fqdn = base_domain_name
-            # Check if name provided is a reference to the root domain
-            if name != '' and name != '@':
-                fqdn = name + "." + base_domain_name
+
+            fqdn = base_domain_name if name in ("", "@") else f"{name}.{base_domain_name}"
+
             record = {
-                "type": ip["type"],
-                "name": fqdn,
+                "type":    ip["type"],
+                "name":    fqdn,
                 "content": ip["ip"],
                 "proxied": proxied,
-                "ttl": ttl
+                "ttl":     ttl
             }
+
             dns_records = cf_api(
-                "zones/" + option['zone_id'] +
-                "/dns_records?per_page=100&type=" + ip["type"],
+                f"zones/{zone_id}/dns_records?per_page=100&type={ip['type']}",
                 "GET", option)
-            identifier = None
-            modified = False
-            duplicate_ids = []
-            if dns_records is not None:
+
+            identifier      = None
+            modified        = False
+            duplicate_ids   = []
+
+            if dns_records:
                 for r in dns_records["result"]:
-                    if (r["name"] == fqdn):
+                    if r["name"] == fqdn:
                         if identifier:
                             if r["content"] == ip["ip"]:
                                 duplicate_ids.append(identifier)
@@ -165,54 +173,81 @@ def commitRecord(ip):
                                 duplicate_ids.append(r["id"])
                         else:
                             identifier = r["id"]
-                            if r['content'] != record['content'] or r['proxied'] != record['proxied']:
+                            if (r["content"] != record["content"] or
+                                    r["proxied"] != record["proxied"]):
                                 modified = True
+
             if identifier:
                 if modified:
-                    print("📡 Updating record " + str(record))
-                    response = cf_api(
-                        "zones/" + option['zone_id'] +
-                        "/dns_records/" + identifier,
-                        "PUT", option, {}, record)
+                    print(f"📡 Updating record {record}")
+                    cf_api(f"zones/{zone_id}/dns_records/{identifier}",
+                           "PUT", option, {}, record)
+                    zone_changed = True
+                    successes += 1
             else:
-                print("➕ Adding new record " + str(record))
-                response = cf_api(
-                    "zones/" + option['zone_id'] + "/dns_records", "POST", option, {}, record)
+                print(f"➕ Adding new record {record}")
+                cf_api(f"zones/{zone_id}/dns_records", "POST", option, {}, record)
+                zone_changed = True
+                successes += 1
+
             if purgeUnknownRecords:
-                for identifier in duplicate_ids:
-                    identifier = str(identifier)
-                    print("🗑️ Deleting stale record " + identifier)
-                    response = cf_api(
-                        "zones/" + option['zone_id'] +
-                        "/dns_records/" + identifier,
-                        "DELETE", option)
+                for dup_id in duplicate_ids:
+                    print(f"🗑️ Deleting stale record {dup_id}")
+                    cf_api(f"zones/{zone_id}/dns_records/{dup_id}", "DELETE", option)
+
+        # ── heartbeat for this zone ───────────────────────────────────────
+        if not zone_changed:
+            print(f"ℹ️  No change needed for {len(subdomains)} "
+                  f"subdomains in zone {zone_id} ({ip['type']})")
+
     return True
 
-
 def updateLoadBalancer(ip):
-    try:
-        for option in config["load_balancer"]:
-            pools = cf_api('user/load_balancers/pools', 'GET', option)
-            if pools:
-                name = option['origin']
-                idxr = dict((p['id'], i) for i, p in enumerate(pools['result']))
-                idx = idxr.get(option['pool_id'])
+    """
+    Update the address of a Cloudflare Load‑Balancer pool origin
+    when the detected WAN IP has changed.
 
-                origins = pools['result'][idx]['origins']
+    If the config has no "load_balancer" section, silently skip.
+    """
+    lb_options = config.get("load_balancer")
+    if not lb_options:
+        return  # no LB configured → nothing to do
 
-                idxr = dict((o['name'], i) for i, o in enumerate(origins))
-                idx = idxr.get(option['origin'])
+    for option in lb_options:
+        try:
+            # Fetch all pools in the account
+            pools = cf_api("user/load_balancers/pools", "GET", option)
+            if not pools or "result" not in pools:
+                continue
 
-                if origins[idx]['address'] != ip['ip']:
-                    origins[idx]['address'] = ip['ip']
-                    data = {'origins': origins}
+            # Locate the desired pool
+            pool_id = option["pool_id"]
+            pool_map = {p["id"]: i for i, p in enumerate(pools["result"])}
+            pool_idx = pool_map.get(pool_id)
+            if pool_idx is None:
+                continue  # pool not found
 
-                    print("📡 Updating LB Pool: " + name)
-                    response = cf_api(f'user/load_balancers/pools/{option["pool_id"]}', 'PATCH', option, {}, data)
-    except:
-        print("No load balancer section found")
-    
+            origins = pools["result"][pool_idx]["origins"]
 
+            # Locate the desired origin within the pool
+            origin_name = option["origin"]
+            origin_map = {o["name"]: i for i, o in enumerate(origins)}
+            origin_idx = origin_map.get(origin_name)
+            if origin_idx is None:
+                continue  # origin not found
+
+            # Update the origin's address if it differs
+            if origins[origin_idx]["address"] != ip["ip"]:
+                origins[origin_idx]["address"] = ip["ip"]
+                data = {"origins": origins}
+
+                print(f"📡 Updating LB Pool '{origin_name}' "
+                      f"to {ip['ip']} (pool {pool_id})")
+                cf_api(f"user/load_balancers/pools/{pool_id}",
+                       "PATCH", option, {}, data)
+
+        except Exception as exc:
+            print(f"⚠️  Load balancer update error: {exc}")  
 
 def cf_api(endpoint, method, config, headers={}, data=False):
     api_token = config['authentication']['api_token']
@@ -328,18 +363,17 @@ if __name__ == '__main__':
                 killer = GracefulExit()
                 prev_ips = None
                 last_ips = {}
-		while True:
-    			ips_this_loop = getIPs()
-    			updateIPs(ips_this_loop)             # <-- unchanged DDNS behaviour
+                while True:
+                    ips_this_loop = getIPs()
+                    updateIPs(ips_this_loop)          # existing behaviour
 
-    		# New: restart AirMessage only if the WAN IP really changed
-    		if ips_this_loop != last_ips:
-        		maybe_restart_airmessage()
-        		last_ips = ips_this_loop.copy()
+                    # Restart AirMessage only if the WAN IP really changed
+                    if ips_this_loop != last_ips:
+                        maybe_restart_airmessage()
+                        last_ips = ips_this_loop.copy()
 
-    if killer.kill_now.wait(ttl):
-        break
-
+                    if killer.kill_now.wait(ttl):
+                        break
             else:
                 print("❓ Unrecognized parameter '" +
                       sys.argv[1] + "'. Stopping now.")
