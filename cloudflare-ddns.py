@@ -296,7 +296,7 @@ def maybe_restart_airmessage():
     if now - _last_restart < RESTART_COOLDOWN:
         print(f"⏱️  AirMessage restart cooling down ({RESTART_COOLDOWN}s)")
         return
-    print(f"🔁  Restarting AirMessage with: {RESTART_CMD}")
+    print(f"🔁  Restarting AirMessage...")
     try:
         subprocess.run(shlex.split(RESTART_CMD), check=True)
         _last_restart = now
