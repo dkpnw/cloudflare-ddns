@@ -198,7 +198,7 @@ def commitRecord(ip):
         # ── heartbeat for this zone ───────────────────────────────────────
         if not zone_changed:
             print(f"ℹ️  No change needed for {len(subdomains)} "
-                  f"subdomains in zone {zone_id} ({ip['type']})")
+                  f"subdomains in zone {base_domain_name} ({ip['type']})")
 
     return True
 
