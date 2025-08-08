@@ -1,0 +1,18 @@
+services:
+  cloudflare-ddns:
+    # build: .
+    image: dkpnw/cloudflare-ddns:latest
+    container_name: cloudflare-ddns
+    security_opt:
+      - no-new-privileges:true
+    network_mode: 'host'
+    environment:
+      PUID: 1000
+      PGID: 1000
+      AIRMESSAGE_RESTART_CMD: /usr/local/bin/restart-airmessage
+      AIRMESSAGE_RESTART_COOLDOWN: 10
+    volumes:
+      - /~cloudflare-ddns/config.json:/config.json
+      - /~/cloudflare-ddns/secret/airmessage_rsa:/ssh/airmessage_rsa:ro
+      - /~/cloudflare-ddns/scripts/restart_airmessage.sh:/usr/local/bin/restart-airmessage:ro
+    restart: always
