@@ -1,0 +1,2 @@
+docker compose exec cloudflare-ddns ssh -o BatchMode=yes -i /ssh/airmessage_rsa \
+  drewpine@host.docker.internal 'echo ok'
