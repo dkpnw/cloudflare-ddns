@@ -101,7 +101,6 @@ services:
     restart: always
 ```
 
-<br>
 # **Linux notes**
 
 If host.docker.internal doesn’t exist, either:
