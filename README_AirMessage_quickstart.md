@@ -22,7 +22,7 @@ Docker Desktop (macOS/Windows) or Docker Engine + Compose (Linux)
 System Settings → General → Sharing → enable Remote Login for your user
 
 1) Create a project folder
-```
+```bash
 mkdir -p cloudflare-ddns/secret
 cd cloudflare-ddns
 ```
@@ -31,7 +31,7 @@ cd cloudflare-ddns
 **2) Create your Cloudflare config**
 
 Create config.json in this folder. Minimal example (IPv4 only; more verbose/optioned config example provided in example-config.json):
-```
+```bash
 {
   "cloudflare": [
     {
@@ -57,14 +57,14 @@ proxied: false is recommended for services that expect direct IP access.
 **3) Generate an SSH key and authorize it on your Mac**
 
 Generate a dedicated ED25519 key for the container:
-```
+```bash
 ssh-keygen -t ed25519 -f ./secret/airmessage_rsa -N '' -C 'cf-ddns→AirMessage'
 chmod 600 ./secret/airmessage_rsa
 ```
 
 Add the public half to the Mac user’s authorized keys:
 
-```
+```bash
 cat ./secret/airmessage_rsa.pub >> ~/.ssh/authorized_keys
 chmod 700 ~/.ssh
 chmod 600 ~/.ssh/authorized_keys
@@ -79,7 +79,7 @@ Keep the private key (secret/airmessage_rsa) safe. The container will mount it r
 **4) Compose file**
 
 Create docker-compose.yml:
-```
+```bash
 version: "3.9"
 services:
   cloudflare-ddns:
@@ -114,7 +114,7 @@ omit host networking and set AIRMESSAGE_SSH_HOST to your host’s LAN IP.
 
 
 **5) Start it**
-```
+```bash
 docker compose up -d
 docker compose logs -f
 ```
@@ -127,14 +127,14 @@ You should see your regular DDNS logs (e.g., “No change needed…”). On real
 **6) Quick tests**
 
 Auth-only check (should print ok):
-```
+```bash
 docker compose exec cloudflare-ddns \
   ssh -o BatchMode=yes -i /ssh/airmessage_rsa \
   "$AIRMESSAGE_SSH_USER@$AIRMESSAGE_SSH_HOST" 'echo ok'
 ```
 
 Force an AirMessage bounce now:
-```
+```bash
 docker compose exec cloudflare-ddns /usr/local/bin/restart-airmessage
 ```
 
@@ -142,7 +142,7 @@ docker compose exec cloudflare-ddns /usr/local/bin/restart-airmessage
 
 
 **7) Updating the container**
-```
+```bash
 docker compose pull
 docker compose up -d
 ```
