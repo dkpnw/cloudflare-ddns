@@ -153,16 +153,16 @@ With restart: always, it will also come back automatically after host reboots (e
 
 **Troubleshooting**
 
-_Permission denied (publickey)._
+_Permission denied (publickey)._<br>
 Re-append the public key to ~/.ssh/authorized_keys on the Mac; ensure perms 600.
 <br><br>
-_Host key verification failed._
+_Host key verification failed._<br>
 The image’s restart helper auto-refreshes host keys each run; if you still see this, ensure you’re using the published image (no local script override) and the command is /usr/local/bin/restart-airmessage.
 <br><br>
-_Config read error_
+_Config read error_<br>
 Make sure your compose mounts ./config.json:/config.json (exact path) and the JSON is valid.
 <br><br>
-_No logs after reboot_
+_No logs after reboot_<br>
 Ensure Docker Desktop itself starts at login, and your compose has restart: always.
 <br><br><br>
 
