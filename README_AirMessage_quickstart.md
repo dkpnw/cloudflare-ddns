@@ -10,13 +10,13 @@ No local build required.
 
 Only two files to provide: config.json (Cloudflare) and a private SSH key.
 
-<br><br><br>
+<br>
 
 **Prerequisites**
 
 Docker Desktop (macOS/Windows) or Docker Engine + Compose (Linux)
 
-<br><br>
+<br>
 
 **On the Mac that runs AirMessage:**
 System Settings → General → Sharing → enable Remote Login for your user
@@ -27,7 +27,7 @@ mkdir -p cloudflare-ddns/secret
 cd cloudflare-ddns
 ```
 
-<br><br><br>
+<br><br>
 **2) Create your Cloudflare config**
 
 Create config.json in this folder. Minimal example (IPv4 only; more verbose/optioned config example provided in example-config.json):
@@ -52,7 +52,7 @@ Tip: Put multiple zones in the array if you want to update several domains at on
 proxied: false is recommended for services that expect direct IP access.
 
 
-<br><br><br>
+<br><br>
 
 **3) Generate an SSH key and authorize it on your Mac**
 
@@ -73,8 +73,7 @@ chmod 600 ~/.ssh/authorized_keys
 Keep the private key (secret/airmessage_rsa) safe. The container will mount it read-only.
 
 
-
-<br><br><br>
+<br><br>
 
 **4) Compose file**
 
@@ -111,7 +110,7 @@ keep network_mode: "host" and set AIRMESSAGE_SSH_HOST=127.0.0.1, or
 omit host networking and set AIRMESSAGE_SSH_HOST to your host’s LAN IP.
 
 
-<br><br><br>
+<br><br>
 
 **5) Start it**
 ```bash
@@ -122,7 +121,7 @@ docker compose logs -f
 You should see your regular DDNS logs (e.g., “No change needed…”). On real IP changes you’ll see Cloudflare updates followed by an AirMessage restart.
 
 
-<br><br><br>
+<br><br>
 
 **6) Quick tests**
 
@@ -149,7 +148,7 @@ docker compose up -d
 
 With restart: always, it will also come back automatically after host reboots (ensure Docker Desktop is set to “Start at login”).
 
-<br><br><br>
+<br><br>
 
 
 **Troubleshooting**
@@ -178,7 +177,7 @@ Adjust AIRMESSAGE_RESTART_COOLDOWN to rate-limit restarts on flappy connections.
 Set your own time zone via TZ for local timestamps in logs.
 
 
-<br><br><br>
+<br><br>
 
 **Security notes**
 
