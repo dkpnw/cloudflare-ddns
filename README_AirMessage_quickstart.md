@@ -1,4 +1,4 @@
-<big><big>**Cloudflare DDNS + AirMessage Auto-Restart (Docker)**</big></big>
+**Cloudflare DDNS + AirMessage Auto-Restart (Docker)**
 
 This container updates Cloudflare DNS for your changing WAN IP and SSHes into your Mac to bounce AirMessage whenever the IP changes (so iMessage connectivity stays stable).
 
