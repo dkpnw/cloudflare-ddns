@@ -1,10 +1,10 @@
-**Cloudflare DDNS + AirMessage Auto-Restart (Docker)**
+# **Cloudflare DDNS + AirMessage Auto-Restart (Docker)**
 
 This container updates Cloudflare DNS for your changing WAN IP and SSHes into your Mac to bounce AirMessage whenever the IP changes (so iMessage connectivity stays stable).
 
 
 
-<big>**Public image: dkpnw/cloudflare-ddns:airmessage-ssh**</big>
+# **Public image: dkpnw/cloudflare-ddns:airmessage-ssh**
 
 No local build required.
 
@@ -13,23 +13,23 @@ Only three files to provide: docker-compose.yml, config.json, and a private SSH 
 
 <br>
 
-**Prerequisites**
+# **Prerequisites**
 
 Docker Desktop (macOS/Windows) or Docker Engine + Compose (Linux)
 
 <br>
 
-**On the Mac that runs AirMessage:**
+# **On the Mac that runs AirMessage:**
 System Settings → General → Sharing → enable Remote Login for your user
 
-1) Create a project folder
+# 1) Create a project folder
 ```bash
 mkdir -p cloudflare-ddns/secret
 cd cloudflare-ddns
 ```
 
 <br><br>
-**2) Create your Cloudflare config**
+# **2) Create your Cloudflare config**
 
 Create config.json in this folder. Minimal example (IPv4 only; more verbose/optioned config example provided in example-config.json):
 ```bash
@@ -55,7 +55,7 @@ proxied: false is recommended for services that expect direct IP access.
 
 <br><br>
 
-**3) Generate an SSH key and authorize it on your Mac**
+# **3) Generate an SSH key and authorize it on your Mac**
 
 Generate a dedicated ED25519 key for the container:
 ```bash
@@ -76,7 +76,7 @@ Keep the private key (secret/airmessage_rsa) safe. The container will mount it r
 
 <br><br>
 
-**4) Compose file**
+# **4) Compose file**
 
 Create docker-compose.yml:
 ```bash
@@ -102,7 +102,7 @@ services:
 ```
 
 <br>
-**Linux notes**
+# **Linux notes**
 
 If host.docker.internal doesn’t exist, either:
 
@@ -113,7 +113,7 @@ omit host networking and set AIRMESSAGE_SSH_HOST to your host’s LAN IP.
 
 <br><br>
 
-**5) Start it**
+# **5) Start it**
 ```bash
 docker compose up -d
 docker compose logs -f
@@ -141,7 +141,7 @@ docker compose exec cloudflare-ddns /usr/local/bin/restart-airmessage
 
 <br><br><br>
 
-**7) Updating the container**
+# **7) Updating the container**
 ```bash
 docker compose pull
 docker compose up -d
@@ -152,7 +152,7 @@ With restart: always, it will also come back automatically after host reboots (e
 <br><br>
 
 
-**Troubleshooting**
+# **Troubleshooting**
 
 _Permission denied (publickey)._<br>
 Re-append the public key to ~/.ssh/authorized_keys on the Mac; ensure perms 600.
@@ -169,7 +169,7 @@ Ensure Docker Desktop itself starts at login, and your compose has restart: alwa
 
 
 
-**Advanced (optional)**
+# **Advanced (optional)**
 
 Change the restart command with AIRMESSAGE_REMOTE_CMD if your app name/path differs.
 
@@ -180,7 +180,7 @@ Set your own time zone via TZ for local timestamps in logs.
 
 <br><br>
 
-**Security notes**
+# **Security notes**
 
 The container uses public-key only SSH with BatchMode=yes (no password prompts).
 
