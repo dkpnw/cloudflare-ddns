@@ -8,7 +8,8 @@ This container updates Cloudflare DNS for your changing WAN IP and SSHes into yo
 
 No local build required.
 
-Only two files to provide: config.json (Cloudflare) and a private SSH key.
+Only three files to provide: docker-compose.yml, config.json, and a private SSH key.<br>
+use _example-docker-compose.yml_ and _example-config.json_ as a starting point.
 
 <br>
 
