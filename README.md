@@ -379,7 +379,7 @@ cd cloudflare-ddns
 
 Create config.json in this folder. Minimal example (IPv4 only):
 
-{
+```{
   "cloudflare": [
     {
       "authentication": { "api_token": "YOUR_CF_API_TOKEN" },
@@ -394,6 +394,7 @@ Create config.json in this folder. Minimal example (IPv4 only):
   "purgeUnknownRecords": false,
   "ttl": 120
 }
+```
 
 
 Tip: Put multiple zones in the array if you want to update several domains at once.
@@ -403,16 +404,16 @@ proxied: false is recommended for services that expect direct IP access.
 
 Generate a dedicated ED25519 key for the container:
 
-ssh-keygen -t ed25519 -f ./secret/airmessage_rsa -N '' -C 'cf-ddns→AirMessage'
+```ssh-keygen -t ed25519 -f ./secret/airmessage_rsa -N '' -C 'cf-ddns→AirMessage'
 chmod 600 ./secret/airmessage_rsa
-
+```
 
 Add the public half to the Mac user’s authorized keys:
 
-cat ./secret/airmessage_rsa.pub >> ~/.ssh/authorized_keys
+```cat ./secret/airmessage_rsa.pub >> ~/.ssh/authorized_keys
 chmod 700 ~/.ssh
 chmod 600 ~/.ssh/authorized_keys
-
+```
 
 Keep the private key (secret/airmessage_rsa) safe. The container will mount it read-only.
 
@@ -420,7 +421,7 @@ Keep the private key (secret/airmessage_rsa) safe. The container will mount it r
 
 Create docker-compose.yml:
 
-version: "3.9"
+```version: "3.9"
 services:
   cloudflare-ddns:
     image: dkpnw/cloudflare-ddns:airmessage-ssh
@@ -439,7 +440,7 @@ services:
       - ./config.json:/config.json:ro
       - ./secret/airmessage_rsa:/ssh/airmessage_rsa:ro
     restart: always
-
+```
 
 Linux notes
 
@@ -450,9 +451,9 @@ keep network_mode: "host" and set AIRMESSAGE_SSH_HOST=127.0.0.1, or
 omit host networking and set AIRMESSAGE_SSH_HOST to your host’s LAN IP.
 
 5) Start it
-docker compose up -d
+```docker compose up -d
 docker compose logs -f
-
+```
 
 You should see your regular DDNS logs (e.g., “No change needed…”). On real IP changes you’ll see Cloudflare updates followed by an AirMessage restart.
 
@@ -460,37 +461,37 @@ You should see your regular DDNS logs (e.g., “No change needed…”). On real
 
 Auth-only check (should print ok):
 
-docker compose exec cloudflare-ddns \
+```docker compose exec cloudflare-ddns \
   ssh -o BatchMode=yes -i /ssh/airmessage_rsa \
   "$AIRMESSAGE_SSH_USER@$AIRMESSAGE_SSH_HOST" 'echo ok'
-
+```
 
 Force an AirMessage bounce now:
 
-docker compose exec cloudflare-ddns /usr/local/bin/restart-airmessage
-
+```docker compose exec cloudflare-ddns /usr/local/bin/restart-airmessage
+```
 7) Updating the container
-docker compose pull
+```docker compose pull
 docker compose up -d
-
+```
 
 With restart: always, it will also come back automatically after host reboots (ensure Docker Desktop is set to “Start at login”).
 
-Troubleshooting
+**Troubleshooting**
 
-Permission denied (publickey).
+_Permission denied (publickey)._
 Re-append the public key to ~/.ssh/authorized_keys on the Mac; ensure perms 600.
 
-Host key verification failed.
+_Host key verification failed._
 The image’s restart helper auto-refreshes host keys each run; if you still see this, ensure you’re using the published image (no local script override) and the command is /usr/local/bin/restart-airmessage.
 
-Config read error
+_Config read error_
 Make sure your compose mounts ./config.json:/config.json (exact path) and the JSON is valid.
 
-No logs after reboot
+_No logs after reboot_
 Ensure Docker Desktop itself starts at login, and your compose has restart: always.
 
-Advanced (optional)
+**Advanced (optional)**
 
 Change the restart command with AIRMESSAGE_REMOTE_CMD if your app name/path differs.
 
@@ -498,7 +499,7 @@ Adjust AIRMESSAGE_RESTART_COOLDOWN to rate-limit restarts on flappy connections.
 
 Set your own time zone via TZ for local timestamps in logs.
 
-Security notes
+**Security notes**
 
 The container uses public-key only SSH with BatchMode=yes (no password prompts).
 
