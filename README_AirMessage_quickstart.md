@@ -22,7 +22,7 @@ cd cloudflare-ddns
 ```
 **2) Create your Cloudflare config**
 
-Create config.json in this folder. Minimal example (IPv4 only):
+Create config.json in this folder. Minimal example (IPv4 only; more verbose/optioned config example provided in example-config.json):
 ```
 {
   "cloudflare": [
