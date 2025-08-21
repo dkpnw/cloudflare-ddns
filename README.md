@@ -4,12 +4,6 @@
 
 Access your home network remotely via a custom domain name without a static IP!
 
-
-This is a fork of timothymiller's popular Cloudflare DDNS Updater. This fork modifies the following:
-- Includes redundant IPv4 and IPv6 detection sources in cases of Cloudflare issues (this is what inspired the fork in the first place)
-- Tweaks to logging to improve clarity and usefulness in messaging from the updater script
-Everything else is pretty much the same. It was already a great and useful script!
-
 ## ⚡ Efficiency
 
 - ❤️ Easy config. List your domains and you're done.
@@ -19,7 +13,7 @@ Everything else is pretty much the same. It was already a great and useful scrip
 - 0️⃣ Zero dependencies.
 - 💪 Supports all platforms.
 - 🏠 Enables low cost self hosting to promote a more decentralized internet.
-- 🔒 Zero-log IP provider ([cdn-cgi/trace](https://www.cloudflare.com/cdn-cgi/trace)) + 3 additional sources in cases of CloudFlare errors (api.ipify.org, ipv4.icanhazip.com, and checkip.amazonaws.com) If one fails, it continues onto the next in the list.
+- 🔒 Zero-log IP provider ([cdn-cgi/trace](https://www.cloudflare.com/cdn-cgi/trace))
 - 👐 GPL-3.0 License. Open source for open audits.
 
 ## 💯 Complete Support of Domain Names, Subdomains, IPv4 & IPv6, and Load Balancing
@@ -42,7 +36,7 @@ Everything else is pretty much the same. It was already a great and useful scrip
 First copy the example configuration file into the real one.
 
 ```bash
-cp config-example.json config.json
+cp example-config.json config.json
 ```
 
 Edit `config.json` and replace the values with your own.
@@ -264,20 +258,6 @@ If you have multiple IP addresses and want to load balance between them, you can
 }
 ```
 
-### Docker environment variable support
-
-Define environmental variables starts with `CF_DDNS_` and use it in config.json
-
-For ex:
-
-```json
-{
-  "cloudflare": [
-    {
-      "authentication": {
-        "api_token": "${CF_DDNS_API_TOKEN}",
-```
-
 ### 🧹 Optional features
 
 `purgeUnknownRecords` removes stale DNS records from Cloudflare. This is useful if you have a dynamic DNS record that you no longer want to use. If you have a dynamic DNS record that you no longer want to use, you can set `purgeUnknownRecords` to `true` and the script will remove the stale DNS record from Cloudflare.
@@ -374,6 +354,160 @@ crontab -e
 
 Create a config.json file with your production credentials.
 
+##Cloudflare DDNS + AirMessage Auto-Restart (Docker)
+
+This container updates Cloudflare DNS for your changing WAN IP and SSHes into your Mac to bounce AirMessage whenever the IP changes (so iMessage connectivity stays stable).
+
+Public image: dkpnw/cloudflare-ddns:airmessage-ssh
+
+No local build required.
+
+Only two files to provide: config.json (Cloudflare) and a private SSH key.
+
+Prerequisites
+
+Docker Desktop (macOS/Windows) or Docker Engine + Compose (Linux)
+
+On the Mac that runs AirMessage:
+System Settings → General → Sharing → enable Remote Login for your user
+
+1) Create a project folder
+mkdir -p cloudflare-ddns/secret
+cd cloudflare-ddns
+
+2) Create your Cloudflare config
+
+Create config.json in this folder. Minimal example (IPv4 only):
+
+{
+  "cloudflare": [
+    {
+      "authentication": { "api_token": "YOUR_CF_API_TOKEN" },
+      "zone_id": "YOUR_ZONE_ID",
+      "subdomains": [
+        { "name": "home", "proxied": false }
+      ]
+    }
+  ],
+  "a": true,
+  "aaaa": false,
+  "purgeUnknownRecords": false,
+  "ttl": 120
+}
+
+
+Tip: Put multiple zones in the array if you want to update several domains at once.
+proxied: false is recommended for services that expect direct IP access.
+
+3) Generate an SSH key and authorize it on your Mac
+
+Generate a dedicated ED25519 key for the container:
+
+ssh-keygen -t ed25519 -f ./secret/airmessage_rsa -N '' -C 'cf-ddns→AirMessage'
+chmod 600 ./secret/airmessage_rsa
+
+
+Add the public half to the Mac user’s authorized keys:
+
+cat ./secret/airmessage_rsa.pub >> ~/.ssh/authorized_keys
+chmod 700 ~/.ssh
+chmod 600 ~/.ssh/authorized_keys
+
+
+Keep the private key (secret/airmessage_rsa) safe. The container will mount it read-only.
+
+4) Compose file
+
+Create docker-compose.yml:
+
+version: "3.9"
+services:
+  cloudflare-ddns:
+    image: dkpnw/cloudflare-ddns:airmessage-ssh
+    pull_policy: always
+    container_name: cloudflare-ddns
+    network_mode: "host"                     # Docker Desktop (macOS/Windows)
+    environment:
+      TZ: "America/Los_Angeles"              # optional, for local-time logs
+      AIRMESSAGE_SSH_USER: "YOUR_MAC_USERNAME"
+      AIRMESSAGE_SSH_HOST: "host.docker.internal"
+      AIRMESSAGE_RESTART_COOLDOWN: "10"      # seconds between restarts if needed
+      AIRMESSAGE_RESTART_CMD: "/usr/local/bin/restart-airmessage"
+      # (optional) customize the remote command:
+      # AIRMESSAGE_REMOTE_CMD: "pkill -x AirMessage || true; sleep 5; open -a AirMessage"
+    volumes:
+      - ./config.json:/config.json:ro
+      - ./secret/airmessage_rsa:/ssh/airmessage_rsa:ro
+    restart: always
+
+
+Linux notes
+
+If host.docker.internal doesn’t exist, either:
+
+keep network_mode: "host" and set AIRMESSAGE_SSH_HOST=127.0.0.1, or
+
+omit host networking and set AIRMESSAGE_SSH_HOST to your host’s LAN IP.
+
+5) Start it
+docker compose up -d
+docker compose logs -f
+
+
+You should see your regular DDNS logs (e.g., “No change needed…”). On real IP changes you’ll see Cloudflare updates followed by an AirMessage restart.
+
+6) Quick tests
+
+Auth-only check (should print ok):
+
+docker compose exec cloudflare-ddns \
+  ssh -o BatchMode=yes -i /ssh/airmessage_rsa \
+  "$AIRMESSAGE_SSH_USER@$AIRMESSAGE_SSH_HOST" 'echo ok'
+
+
+Force an AirMessage bounce now:
+
+docker compose exec cloudflare-ddns /usr/local/bin/restart-airmessage
+
+7) Updating the container
+docker compose pull
+docker compose up -d
+
+
+With restart: always, it will also come back automatically after host reboots (ensure Docker Desktop is set to “Start at login”).
+
+Troubleshooting
+
+Permission denied (publickey).
+Re-append the public key to ~/.ssh/authorized_keys on the Mac; ensure perms 600.
+
+Host key verification failed.
+The image’s restart helper auto-refreshes host keys each run; if you still see this, ensure you’re using the published image (no local script override) and the command is /usr/local/bin/restart-airmessage.
+
+Config read error
+Make sure your compose mounts ./config.json:/config.json (exact path) and the JSON is valid.
+
+No logs after reboot
+Ensure Docker Desktop itself starts at login, and your compose has restart: always.
+
+Advanced (optional)
+
+Change the restart command with AIRMESSAGE_REMOTE_CMD if your app name/path differs.
+
+Adjust AIRMESSAGE_RESTART_COOLDOWN to rate-limit restarts on flappy connections.
+
+Set your own time zone via TZ for local timestamps in logs.
+
+Security notes
+
+The container uses public-key only SSH with BatchMode=yes (no password prompts).
+
+It refreshes host keys automatically, so OS updates on the Mac won’t break the SSH step.
+
+Keep your private key in secret/airmessage_rsa safe; never commit it to version control.
+
+That’s it—drop in config.json, generate the key, set your username in the compose file, and you’re live.
+
 ### 💖 Please Note
 
 The optional `docker-build-all.sh` script requires Docker experimental support to be enabled.
@@ -436,8 +570,11 @@ This Template is licensed under the GNU General Public License, version 3 (GPLv3
 
 ## Author
 
-Timothy Miller
+Timothy Miller, forked and customized by Drew Pine (using GPT-o3 and 5)
 
 [View my GitHub profile 💡](https://github.com/timothymiller)
 
 [View my personal website 💻](https://timknowsbest.com)
+    
+    
+AirMessage Restarter Instructions (Added by Drew Pine https://github.com/dkpnw)
