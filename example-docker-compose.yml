@@ -2,6 +2,7 @@ services:
   cloudflare-ddns:
     # build: .
     image: dkpnw/cloudflare-ddns:latest
+    pull_policy: always
     container_name: cloudflare-ddns
     security_opt:
       - no-new-privileges:true
@@ -9,10 +10,12 @@ services:
     environment:
       PUID: 1000
       PGID: 1000
+      AIRMESSAGE_SSH_USER: "drewpine"             # <-- Mac user
+      AIRMESSAGE_SSH_HOST: "host.docker.internal" # optional override
+      AIRMESSAGE_REMOTE_CMD: "pkill -x AirMessage || true; sleep 5; open -a AirMessage"
       AIRMESSAGE_RESTART_CMD: /usr/local/bin/restart-airmessage
       AIRMESSAGE_RESTART_COOLDOWN: 10
     volumes:
       - /~cloudflare-ddns/config.json:/config.json
       - /~/cloudflare-ddns/secret/airmessage_rsa:/ssh/airmessage_rsa:ro
-      - /~/cloudflare-ddns/scripts/restart_airmessage.sh:/usr/local/bin/restart-airmessage:ro
     restart: always
